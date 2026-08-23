@@ -69,4 +69,7 @@ def sanitize_artifact(kind: str, content: str) -> str:
     viewer renders markdown→HTML. Same policy for both kinds."""
     if kind == "html":
         return sanitize_html(content)
-    return content  # markdown is rendered client-side with rehype-sanitize; raw HTML is stripped there
+    # Markdown is rendered client-side by react-markdown, which does NOT
+    # render embedded raw HTML (no rehype-raw plugin) — HTML inside markdown
+    # arrives as inert text, so the content passes through unchanged here.
+    return content

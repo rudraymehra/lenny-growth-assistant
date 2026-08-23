@@ -26,3 +26,20 @@ def test_classification(text: str, expected: str):
 def test_essay_wins_over_document_words():
     # an essay request that also mentions markdown stays an essay
     assert classify("Write an essay as a markdown document") == "essay"
+
+
+def test_promote_to_artifact_titles_and_kinds():
+    from app.engines.local_engine import _promote_to_artifact
+
+    md = _promote_to_artifact("essay", "# Activation Wins\n\nBody text here.")
+    assert md.kind == "markdown" and md.title == "Activation Wins"
+
+    setext = _promote_to_artifact("essay", "Improving Activation\n=========\n\nBody.")
+    assert setext.title == "Improving Activation"
+
+    html = _promote_to_artifact("artifact_html", "<html><style>b{}</style><b>x</b></html>")
+    assert html.kind == "html"
+
+    # html intent but markdown-shaped output stays markdown (viewer renders it properly)
+    fallback = _promote_to_artifact("artifact_html", "# Just markdown")
+    assert fallback.kind == "markdown"

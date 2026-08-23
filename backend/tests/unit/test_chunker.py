@@ -95,6 +95,31 @@ def test_mm_ss_timestamp_variant():
     assert [s.speaker for s in segments] == ["Janna Bastow", "Lenny", "Janna Bastow"]
 
 
+def test_bracket_timestamp_variant():
+    # ryan-hoover format: "[00:00:28] Lenny: text on one line"
+    raw = (
+        "## Transcript\n\n"
+        "[00:00:00] Ryan: That flutter in your stomach.\n"
+        "[00:28] Lenny: Ryan Hoover is the founder of Product Hunt.\n"
+        "[01:00:05] Ryan: Deep into hour one.\n"
+    )
+    segments = parse_segments(raw)
+    assert [s.ts_seconds for s in segments] == [0, 28, 3605]
+    assert [s.speaker for s in segments] == ["Ryan", "Lenny", "Ryan"]
+
+
+def test_bare_speaker_variant_without_timestamps():
+    # adriel-frederick format: "Speaker Name:" alone on a line, no timestamps
+    raw = (
+        "## Transcript\n\n"
+        "Adriel Frederick:\nAlgorithms don't understand long term effects.\n\n"
+        "Lenny:\nWelcome to the podcast.\n"
+    )
+    segments = parse_segments(raw)
+    assert [s.speaker for s in segments] == ["Adriel Frederick", "Lenny"]
+    assert all(s.ts_seconds == 0 for s in segments)
+
+
 def test_tiny_trailing_chunk_is_folded():
     segments_text = "\n\n".join(
         f"Guest (00:{i:02d}:00):\n" + ("word " * 300) for i in range(4)

@@ -1,5 +1,8 @@
 # Golden retrieval set: question → episode slugs that plausibly answer it.
 # A hit = any expected slug appears in the top-5 retrieved episodes.
+# Known miss kept deliberately: "premortem" (users type it unhyphenated) vs
+# "pre-mortem" in transcripts defeats both retrieval legs — a real gap worth
+# tracking, not papering over. Candidate fix: query-side synonym expansion.
 # Guest–topic pairings are canonical (each guest is famous for that topic on
 # the show), so retrieval should find them even across multi-episode guests
 # (any slug prefix match counts, e.g. elena-verna-20 matches elena-verna).
@@ -26,7 +29,9 @@
 - question: What advice do guests give about running effective A/B tests and experiments?
   expected: [ronny-kohavi, gustaf-alstromer, elena-verna]
 - question: How should founders think about pricing and packaging for SaaS?
-  expected: [madhavan-ramanujam, patrick-campbell]
+  # naomi-ionita added after eval review: her episode is specifically about
+  # monetization/pricing strategy — retrieval surfacing her is a true positive.
+  expected: [madhavan-ramanujam, patrick-campbell, naomi-ionita]
 - question: What frameworks help with prioritization on a product roadmap?
   expected: [shreyas-doshi, john-cutler, ian-mcallister]
 - question: How do you build a premortem and manage product risks?

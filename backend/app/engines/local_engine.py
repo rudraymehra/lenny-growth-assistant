@@ -9,13 +9,14 @@ documented in architecture.md#engine-asymmetry.
 """
 
 import json
+import re
 import time
 from typing import AsyncIterator
 
 import asyncpg
 import httpx
 
-from app.artifacts.extractor import ArtifactStreamFilter
+from app.artifacts.extractor import ArtifactStreamFilter, ExtractedArtifact
 from app.artifacts.store import save_artifact
 from app.config import Settings
 from app.db.repos import ArtifactRepo
@@ -53,6 +54,19 @@ _ARTIFACT_INSTRUCTION = """When the user asks for a document (HTML page or markd
 ```
 
 For HTML: produce one complete, self-contained document with inline <style>. No JavaScript, no external resources except https images. Before the fenced block, write one short sentence saying what you created. Do not repeat the document content outside the block."""
+
+
+_TITLE_LINE = re.compile(r"^#{1,3}[ \t]*(.+)$|^([^\n]{4,90})\n=+[ \t]*$", re.MULTILINE)
+
+
+def _promote_to_artifact(intent: Intent, text: str) -> ExtractedArtifact:
+    """Wrap a fence-less document response as an artifact. Title comes from
+    the first markdown heading (either # or setext ===== style)."""
+    m = _TITLE_LINE.search(text)
+    title = (m.group(1) or m.group(2)).strip() if m else "Generated document"
+    looks_html = "<html" in text.lower() or "<style" in text.lower() or "<div" in text.lower()
+    kind = "html" if (intent == "artifact_html" and looks_html) else "markdown"
+    return ExtractedArtifact(kind=kind, title=title, content=text.strip())
 
 
 def _render_excerpts(chunks: list[RetrievedChunk]) -> str:
@@ -113,8 +127,15 @@ class LocalRagEngine:
             messages = self._build_messages(intent, history, user_content, chunks)
 
             # 3. Stream from Ollama, filtering artifact fences out of chat text.
+            #    Chat intent streams tokens live. Document intents (essay/
+            #    artifact) buffer instead: if the small model ignores the fence
+            #    convention — they often do — the whole response is promoted to
+            #    an artifact after the fact, which streaming would make
+            #    impossible (tokens already shown can't be retracted).
+            buffer_visible = intent != "chat"
             artifact_filter = ArtifactStreamFilter()
             full_text = ""
+            visible_text = ""
             usage = Usage(provider=self.name, model=self._settings.ollama_model)
             async for delta, final_stats in self._ollama_stream(messages, intent):
                 if final_stats is not None:
@@ -124,10 +145,22 @@ class LocalRagEngine:
                     full_text += delta
                     visible = artifact_filter.feed(delta)
                     if visible:
-                        yield TokenEvent(text=visible)
+                        visible_text += visible
+                        if not buffer_visible:
+                            yield TokenEvent(text=visible)
             tail = artifact_filter.flush()
             if tail:
-                yield TokenEvent(text=tail)
+                visible_text += tail
+                if not buffer_visible:
+                    yield TokenEvent(text=tail)
+
+            if buffer_visible:
+                if not artifact_filter.artifacts and visible_text.strip():
+                    # Fence ignored: promote the entire response to an artifact.
+                    artifact_filter.artifacts.append(_promote_to_artifact(intent, visible_text))
+                    yield TokenEvent(text="I've written it up — see the artifact viewer.")
+                else:
+                    yield TokenEvent(text=visible_text)
 
             # 4. Citations from database truth (only markers the model used
             #    AND retrieval actually returned survive).

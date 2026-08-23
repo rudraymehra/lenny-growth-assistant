@@ -39,6 +39,16 @@ _BLOCK_HEADER = re.compile(
 )
 _INAUDIBLE = re.compile(r"\[inaudible[^\]]*\]", re.IGNORECASE)
 
+# Rare variants (a handful of the 303 episodes):
+# B) "[00:00:28] Lenny: text on the same line"  (2- or 3-part timestamp)
+_BRACKET_LINE = re.compile(
+    r"^\[(?P<a>\d{1,2}):(?P<b>\d{2})(?::(?P<c>\d{2}))?\][ \t]*"
+    r"(?P<name>[^\n:]{1,60}):[ \t]*(?P<text>.+)$",
+    re.MULTILINE,
+)
+# C) a bare "Speaker Name:" line with no timestamp, paragraph(s) below
+_BARE_SPEAKER = re.compile(r"^(?P<name>[A-Z][^\n:()\[\]]{0,60}):[ \t]*$", re.MULTILINE)
+
 TARGET_TOKENS = 800
 MIN_TOKENS = 80  # trailing fragments below this merge into the previous chunk
 
@@ -109,7 +119,9 @@ def parse_front_matter(raw: str, slug: str) -> tuple[EpisodeMeta, str]:
 
 def parse_segments(body: str) -> list[Segment]:
     """Split the transcript body into speaker/timestamp segments, carrying the
-    last-seen speaker across name-less continuation blocks."""
+    last-seen speaker across name-less continuation blocks. Falls back to the
+    rarer bracket-timestamp and bare-speaker formats when the primary format
+    doesn't appear."""
     matches = list(_BLOCK_HEADER.finditer(body))
     segments: list[Segment] = []
     current_speaker = "Unknown"
@@ -125,6 +137,33 @@ def parse_segments(body: str) -> list[Segment]:
         text = re.sub(r"\s+", " ", text)
         if text:
             segments.append(Segment(speaker=current_speaker, ts_seconds=ts, text=text))
+    if segments:
+        return segments
+    return _parse_bracket_segments(body) or _parse_bare_speaker_segments(body)
+
+
+def _parse_bracket_segments(body: str) -> list[Segment]:
+    """Variant B: '[00:00:28] Lenny: text…' one utterance per line."""
+    segments: list[Segment] = []
+    for m in _BRACKET_LINE.finditer(body):
+        a, b, c = int(m.group("a")), int(m.group("b")), m.group("c")
+        ts = a * 3600 + b * 60 + int(c) if c is not None else a * 60 + b
+        text = re.sub(r"\s+", " ", _INAUDIBLE.sub("", m.group("text"))).strip()
+        if text:
+            segments.append(Segment(speaker=m.group("name").strip(), ts_seconds=ts, text=text))
+    return segments
+
+
+def _parse_bare_speaker_segments(body: str) -> list[Segment]:
+    """Variant C: bare 'Speaker Name:' lines, no timestamps. Timestamps are 0,
+    so citations degrade gracefully to episode-start links."""
+    matches = list(_BARE_SPEAKER.finditer(body))
+    segments: list[Segment] = []
+    for i, m in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(body)
+        text = re.sub(r"\s+", " ", _INAUDIBLE.sub("", body[m.end():end])).strip()
+        if text:
+            segments.append(Segment(speaker=m.group("name").strip(), ts_seconds=0, text=text))
     return segments
 
 
