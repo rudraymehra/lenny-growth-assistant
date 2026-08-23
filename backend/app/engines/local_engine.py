@@ -32,7 +32,9 @@ from app.skills.loader import ship30_prompt
 
 log = get_logger(__name__)
 
-_CHUNK_CHAR_LIMIT = 2000   # keep the prompt within a small model's context
+_CHUNK_CHAR_LIMIT = 1600   # keep the prompt within a small model's context
+_CHAT_CHUNKS = 6           # chat uses fewer excerpts than essays: prefill on a
+_ESSAY_CHUNKS = 8          # small local model is the dominant latency cost
 _HISTORY_MESSAGES = 6
 _HISTORY_CHAR_LIMIT = 1200
 
@@ -97,9 +99,11 @@ class LocalRagEngine:
             # 1. Retrieval — always grounded, retrieval happens before the model.
             yield ToolUseEvent(tool="search_transcripts", summary=f'"{user_content[:80]}"')
             embedding = await embed_query_async(user_content, self._settings.embedding_model)
-            chunks = await hybrid_search(
-                self._pool, embedding, user_content, self._settings.retrieval_top_k
+            top_k = min(
+                self._settings.retrieval_top_k,
+                _ESSAY_CHUNKS if intent == "essay" else _CHAT_CHUNKS,
             )
+            chunks = await hybrid_search(self._pool, embedding, user_content, top_k)
             yield ToolUseEvent(
                 tool="search_transcripts",
                 summary=f"{len(chunks)} transcript excerpts retrieved",
@@ -196,13 +200,16 @@ class LocalRagEngine:
             "model": self._settings.ollama_model,
             "messages": messages,
             "stream": True,
-            "think": False,  # qwen3: skip thinking tokens; ignored by non-thinking models
             "options": {
                 # Essays need headroom: skill + excerpts + ~1,700 output tokens.
                 "num_ctx": 16384 if intent != "chat" else 8192,
                 "temperature": 0.7,
             },
         }
+        # Ollama rejects `think` on models without a thinking mode, so send it
+        # only where it applies (suppresses reasoning tokens on those models).
+        if any(f in self._settings.ollama_model for f in ("qwen3", "deepseek-r1", "gpt-oss")):
+            payload["think"] = False
         timeout = httpx.Timeout(self._settings.model_timeout_s, connect=5.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
             async with client.stream(
@@ -213,6 +220,12 @@ class LocalRagEngine:
                     if not line.strip():
                         continue
                     data = json.loads(line)
+                    if data.get("error"):
+                        # Ollama reports some failures as 200 + error lines.
+                        raise httpx.HTTPStatusError(
+                            f"Ollama error: {data['error']}",
+                            request=resp.request, response=resp,
+                        )
                     if data.get("done"):
                         yield "", data
                     else:

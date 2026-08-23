@@ -5,6 +5,12 @@ Wire guarantees the frontend relies on:
   even if the engine crashes mid-generation;
 - a comment heartbeat (`: hb`) at least every HEARTBEAT_S keeps proxies from
   buffering or closing slow local-model generations.
+
+Implementation note: the engine generator is pumped by a background task into
+a queue, and heartbeat timeouts apply to `queue.get()` only. Applying
+`asyncio.wait_for` directly to the generator's `__anext__` would CANCEL the
+generator on every heartbeat — cancelling exactly the long model call the
+heartbeat exists to survive (found the hard way; regression-tested).
 """
 
 import asyncio
@@ -12,7 +18,9 @@ from typing import AsyncIterator
 
 from app.models.domain import DoneEvent, EngineEvent, ErrorEvent, Usage
 
-HEARTBEAT_S = 15
+HEARTBEAT_S = 15.0
+
+_SENTINEL: object = object()
 
 
 def encode_frame(event: EngineEvent) -> str:
@@ -20,28 +28,42 @@ def encode_frame(event: EngineEvent) -> str:
     return f"event: {event.type}\ndata: {payload}\n\n"
 
 
-async def sse_stream(events: AsyncIterator[EngineEvent]) -> AsyncIterator[str]:
+async def sse_stream(
+    events: AsyncIterator[EngineEvent], heartbeat_s: float | None = None
+) -> AsyncIterator[str]:
     """Relay engine events as SSE frames with heartbeats and a guaranteed
     terminal frame."""
+    heartbeat = heartbeat_s if heartbeat_s is not None else HEARTBEAT_S
+    queue: asyncio.Queue = asyncio.Queue()
+
+    async def pump() -> None:
+        try:
+            async for event in events:
+                await queue.put(event)
+        except Exception:  # noqa: BLE001 — engine broke its contract; report, don't hang
+            await queue.put(ErrorEvent(
+                code="internal_error",
+                message="The response stream failed unexpectedly.",
+                recoverable=False,
+            ))
+        finally:
+            await queue.put(_SENTINEL)
+
+    pump_task = asyncio.create_task(pump())
     terminal_sent = False
-    iterator = events.__aiter__()
     try:
         while True:
             try:
-                event = await asyncio.wait_for(iterator.__anext__(), timeout=HEARTBEAT_S)
+                item = await asyncio.wait_for(queue.get(), timeout=heartbeat)
             except asyncio.TimeoutError:
                 yield ": hb\n\n"
                 continue
-            except StopAsyncIteration:
+            if item is _SENTINEL:
                 break
-            if isinstance(event, (DoneEvent, ErrorEvent)):
+            yield encode_frame(item)
+            if isinstance(item, (DoneEvent, ErrorEvent)):
                 terminal_sent = True
-            yield encode_frame(event)
-    except Exception:  # noqa: BLE001 — engine broke its contract; still terminate the wire
-        yield encode_frame(ErrorEvent(
-            code="internal_error", message="The response stream failed unexpectedly.",
-            recoverable=False,
-        ))
-        terminal_sent = True
-    if not terminal_sent:
-        yield encode_frame(DoneEvent(usage=Usage()))
+        if not terminal_sent:
+            yield encode_frame(DoneEvent(usage=Usage()))
+    finally:
+        pump_task.cancel()

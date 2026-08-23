@@ -20,7 +20,10 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-sonnet-5"
 
     ollama_base_url: str = "http://host.docker.internal:11434"
-    ollama_model: str = "qwen3:4b"
+    # llama3.2:3b: no thinking mode, ~2GB, fast enough for interactive use on
+    # an 8GB machine. qwen3:4b was measured at ~4.5 tok/s with reasoning
+    # preambles leaking into answers — see architecture.md#local-model-choice.
+    ollama_model: str = "llama3.2:3b"
 
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_dim: int = 384

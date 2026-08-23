@@ -64,8 +64,9 @@ export function useChat() {
   );
 
   const send = useCallback(
-    async (content: string) => {
-      if (!activeId) return;
+    async (content: string, sessionIdOverride?: string) => {
+      const sessionId = sessionIdOverride ?? activeId;
+      if (!sessionId) return;
       setFailure(null);
       // optimistic user message
       setMessages((prev) => [
@@ -85,7 +86,7 @@ export function useChat() {
       const controller = new AbortController();
       abortRef.current = controller;
       try {
-        await api.streamMessage(activeId, content, (event: StreamEvent) => {
+        await api.streamMessage(sessionId, content, (event: StreamEvent) => {
           if (event.type === "token") {
             setDraft((d) => d && { ...d, content: d.content + event.text });
           } else if (event.type === "tool_use") {
@@ -111,7 +112,7 @@ export function useChat() {
         abortRef.current = null;
         // reload authoritative state (persisted ids, citations, usage, title)
         try {
-          setMessages(await api.listMessages(activeId));
+          setMessages(await api.listMessages(sessionId));
           await refreshSessions();
         } catch {
           /* backend down: failure banner already shown */
