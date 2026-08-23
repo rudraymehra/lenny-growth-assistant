@@ -41,7 +41,7 @@ _HISTORY_CHAR_LIMIT = 1200
 _GROUNDING_SYSTEM = """You are the Lenny Growth Assistant, an internal tool for a product & growth team. You answer questions using ONLY the numbered transcript excerpts from Lenny's Podcast provided in each request.
 
 Rules:
-- Ground every substantive claim in the excerpts and mark it with an inline citation like [1] or [3], matching the excerpt numbers.
+- Every sentence that uses an excerpt MUST end with its citation marker: [1], [2], etc., matching the excerpt numbers. Example of correct style: "Brian Chesky argues founders must stay in the details, comparing it to how a board oversees a CEO [2]. He explicitly separates that from telling people what to do [2]."
 - Name the guest when you use their story or advice.
 - If the excerpts do not contain enough information to answer, say exactly that in one short paragraph — do not invent facts, do not use outside knowledge, and do not add citation markers you cannot support.
 - Answer in clean markdown. Be direct and practical."""
@@ -188,9 +188,15 @@ class LocalRagEngine:
             messages.append({"role": m.role, "content": m.content[:_HISTORY_CHAR_LIMIT]})
 
         excerpts = _render_excerpts(chunks) if chunks else "(no relevant excerpts found)"
+        # Small models weight the end of the prompt heavily — restate the
+        # citation contract right next to the request.
+        reminder = (
+            "(Cite excerpts inline with [n] markers after each claim; "
+            "if the excerpts don't cover it, say so.)"
+        )
         messages.append({
             "role": "user",
-            "content": f"Transcript excerpts:\n\n{excerpts}\n\n---\nRequest: {user_content}",
+            "content": f"Transcript excerpts:\n\n{excerpts}\n\n---\nRequest: {user_content}\n{reminder}",
         })
         return messages
 

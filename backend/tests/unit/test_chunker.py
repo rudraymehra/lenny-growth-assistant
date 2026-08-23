@@ -82,6 +82,19 @@ def test_real_transcript_end_to_end():
     assert [c.chunk_index for c in chunks] == list(range(len(chunks)))
 
 
+def test_mm_ss_timestamp_variant():
+    # 28 of 303 episodes use (MM:SS) instead of (HH:MM:SS)
+    raw = (
+        "---\nguest: Janna Bastow\n---\n\n## Transcript\n\n"
+        "Janna Bastow (00:00):\nA roadmap is a prototype for your strategy.\n\n"
+        "Lenny (01:15):\nHow so?\n\n"
+        "Janna Bastow (65:30):\nBeyond an hour, minutes keep counting.\n"
+    )
+    segments = parse_segments(parse_front_matter(raw, "janna-bastow")[1])
+    assert [s.ts_seconds for s in segments] == [0, 75, 3930]
+    assert [s.speaker for s in segments] == ["Janna Bastow", "Lenny", "Janna Bastow"]
+
+
 def test_tiny_trailing_chunk_is_folded():
     segments_text = "\n\n".join(
         f"Guest (00:{i:02d}:00):\n" + ("word " * 300) for i in range(4)

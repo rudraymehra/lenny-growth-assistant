@@ -28,12 +28,13 @@ from dataclasses import dataclass, field
 
 import yaml
 
-# "Lenny Rachitsky (00:01:21):" or continuation "(00:01:21):".
+# "Lenny Rachitsky (00:01:21):" or continuation "(00:01:21):". 28 of the 303
+# episodes use MM:SS instead of HH:MM:SS, so the hours part is optional.
 # Whitespace around the name must be same-line ([ \t], not \s): a \s* here
 # would swallow newlines and fuse a paragraph line with the next block's
 # timestamp into one bogus header.
 _BLOCK_HEADER = re.compile(
-    r"^(?P<name>[^\n(]{0,80}?)[ \t]*\((?P<h>\d{1,2}):(?P<m>\d{2}):(?P<s>\d{2})\):[ \t]*$",
+    r"^(?P<name>[^\n(]{0,80}?)[ \t]*\((?:(?P<h>\d{1,2}):)?(?P<m>\d{1,2}):(?P<s>\d{2})\):[ \t]*$",
     re.MULTILINE,
 )
 _INAUDIBLE = re.compile(r"\[inaudible[^\]]*\]", re.IGNORECASE)
@@ -117,7 +118,8 @@ def parse_segments(body: str) -> list[Segment]:
         # Headings ("## Transcript") never match; a bare "(00:01:21):" gives name "".
         if name:
             current_speaker = name
-        ts = int(m.group("h")) * 3600 + int(m.group("m")) * 60 + int(m.group("s"))
+        hours = int(m.group("h")) if m.group("h") else 0
+        ts = hours * 3600 + int(m.group("m")) * 60 + int(m.group("s"))
         end = matches[i + 1].start() if i + 1 < len(matches) else len(body)
         text = _INAUDIBLE.sub("", body[m.end():end]).strip()
         text = re.sub(r"\s+", " ", text)

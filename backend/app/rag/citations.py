@@ -39,14 +39,19 @@ def extract_citations(text: str, retrieved: list[RetrievedChunk]) -> list[Citati
     retrieved-chunk list, in retrieval order. Deduplicated, ordered by first
     appearance; unmatched markers are dropped and logged."""
     citations: list[Citation] = []
-    seen: set[int] = set()
+    seen_markers: set[int] = set()
+    seen_chunks: set[int] = set()  # same chunk can get two indices across searches
     for m in _MARKER.finditer(text):
         n = int(m.group(1))
-        if n in seen:
+        if n in seen_markers:
             continue
-        seen.add(n)
+        seen_markers.add(n)
         if 1 <= n <= len(retrieved):
-            citations.append(citation_for(n, retrieved[n - 1]))
+            chunk = retrieved[n - 1]
+            if chunk.chunk_id in seen_chunks:
+                continue
+            seen_chunks.add(chunk.chunk_id)
+            citations.append(citation_for(n, chunk))
         else:
             log.warning(EVT_CITATION_UNMATCHED, marker=n, retrieved_count=len(retrieved))
     return citations

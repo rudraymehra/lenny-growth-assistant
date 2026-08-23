@@ -98,7 +98,7 @@ fails mid-reply → typed error event with a "retry on local" affordance —
 make demo            # one-command startup (idempotent)
 make ingest          # re-ingest transcripts (hash-skips unchanged episodes)
 make ingest-refresh  # force full re-chunk + re-embed
-make test            # 60 unit + integration tests (no model required)
+make test            # 62 unit + integration tests (no model required)
 make eval            # golden-set retrieval eval: hit@5 ≥ 80% against real KB
 make logs            # follow structured JSON backend logs
 make clean           # stop and delete volumes (destroys the database)

@@ -110,7 +110,10 @@ class ClaudeAgentEngine:
                                         session.id, msg.session_id
                                     )
 
-            for citation in extract_citations(full_text, ctx.retrieved):
+            # Essays/documents carry their [n] markers inside the artifact, so
+            # scan artifact bodies too — chips then link the essay's sources.
+            citation_text = full_text + "\n" + "\n".join(a.content for a in ctx.artifacts)
+            for citation in extract_citations(citation_text, ctx.retrieved):
                 yield CitationEvent(citation=citation)
             for artifact in ctx.artifacts:
                 yield ArtifactEvent(
@@ -170,7 +173,10 @@ class ClaudeAgentEngine:
                 "mcp__kb__save_artifact",
                 "Skill",
             ],
-            permission_mode="bypassPermissions",  # headless server; tools above are the whole surface
+            # "default" + the allowed_tools pre-approval covers everything the
+            # agent needs. (bypassPermissions is refused when the container
+            # runs as root — found in testing.)
+            permission_mode="default",
             max_turns=10,
             env=env,
             resume=sdk_session_id,
@@ -230,7 +236,8 @@ class ClaudeAgentEngine:
         @tool(
             "save_artifact",
             "Save a finished document for the in-app artifact viewer. "
-            "kind: 'markdown' or 'html'. content: the complete document.",
+            "kind: 'markdown' or 'html'. content: the complete document. "
+            "Call EXACTLY ONCE per reply, with the final version only.",
             {"kind": str, "title": str, "content": str},
         )
         async def save_artifact(args: dict) -> dict:

@@ -28,6 +28,13 @@ def test_fabricated_marker_is_dropped():
     assert citations[0].index == 1
 
 
+def test_same_chunk_under_two_markers_is_deduplicated():
+    # cross-search duplicates: chunk retrieved twice gets indices 1 and 3
+    shared = _chunk(9)
+    citations = extract_citations("a [1] b [2] c [3]", [shared, _chunk(2), shared])
+    assert [c.index for c in citations] == [1, 2]
+
+
 def test_no_retrieval_means_no_citations():
     assert extract_citations("Confident nonsense [1] [2].", []) == []
 
