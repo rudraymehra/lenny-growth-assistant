@@ -1,0 +1,32 @@
+# Environment / secrets
+.env
+*.env.local
+
+# Data (transcript clone is fetched by scripts/fetch_transcripts.sh)
+data/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Model caches
+.fastembed_cache/
+*.onnx
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Claude Agent SDK workspace state (sessions are persisted in Postgres, not here)
+backend/workspace/.claude/projects/
+backend/workspace/.claude/settings.local.json

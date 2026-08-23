@@ -1,0 +1,70 @@
+name: lenny-growth-assistant
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: lenny
+      POSTGRES_PASSWORD: lenny
+      POSTGRES_DB: lenny
+    ports:
+      - "5433:5432" # host port 5433 to avoid clashing with a local Postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/pg-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lenny -d lenny"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://lenny:lenny@postgres:5432/lenny}
+      TRANSCRIPTS_DIR: /data/transcripts
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # macOS has this built in; needed for Linux parity
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 2500M
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  # Optional: dockerised Ollama for Linux reviewers without a native install.
+  # On macOS prefer native Ollama (Metal GPU): `brew install ollama`.
+  # Enable with: docker compose --profile ollama-docker up -d
+  # and set OLLAMA_BASE_URL=http://ollama:11434 in .env
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama-docker"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+
+volumes:
+  pgdata:
+  ollama-models:

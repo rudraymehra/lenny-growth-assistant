@@ -1,0 +1,35 @@
+# Golden retrieval set: question → episode slugs that plausibly answer it.
+# A hit = any expected slug appears in the top-5 retrieved episodes.
+# Guest–topic pairings are canonical (each guest is famous for that topic on
+# the show), so retrieval should find them even across multi-episode guests
+# (any slug prefix match counts, e.g. elena-verna-20 matches elena-verna).
+- question: How does Brian Chesky run Airbnb and what does founder mode look like in practice?
+  expected: [brian-chesky]
+- question: When should a startup hire its first growth team?
+  expected: [casey-winters, elena-verna]
+- question: How do I position a product against competitors in a crowded market?
+  expected: [april-dunford]
+- question: What growth loops matter for a B2B SaaS product?
+  expected: [casey-winters, elena-verna, dan-hockenmaier]
+- question: How did Superhuman measure product-market fit with a survey?
+  expected: [rahul-vohra]
+- question: What is the North Star metric framework and how do I pick one?
+  expected: [sean-ellis, lauryn-isford, elena-verna]
+- question: How should product managers develop product sense and taste?
+  expected: [shreyas-doshi, julie-zhuo, jules-walter]
+- question: What does good product discovery look like according to continuous discovery habits?
+  expected: [teresa-torres, marty-cagan]
+- question: How do marketplaces balance supply and demand in the early days?
+  expected: [dan-hockenmaier, ramesh-johari, benjamin-lauzier]
+- question: How did Notion approach building community and finding product-market fit?
+  expected: [ivan-zhao]
+- question: What advice do guests give about running effective A/B tests and experiments?
+  expected: [ronny-kohavi, gustaf-alstromer, elena-verna]
+- question: How should founders think about pricing and packaging for SaaS?
+  expected: [madhavan-ramanujam, patrick-campbell]
+- question: What frameworks help with prioritization on a product roadmap?
+  expected: [shreyas-doshi, john-cutler, ian-mcallister]
+- question: How do you build a premortem and manage product risks?
+  expected: [shreyas-doshi]
+- question: What does Meta's growth team attribute Facebook's early growth to?
+  expected: [naomi-gleit]
