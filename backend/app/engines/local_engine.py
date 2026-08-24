@@ -26,7 +26,7 @@ from app.models.domain import (
     ArtifactEvent, Citation, CitationEvent, DoneEvent, EngineEvent, EngineHealth,
     ErrorEvent, Message, RetrievedChunk, Session, TokenEvent, ToolUseEvent, Usage,
 )
-from app.rag.citations import extract_citations
+from app.rag.citations import extract_citations, fallback_citations_by_guest
 from app.rag.embedder import embed_query_async
 from app.rag.search import hybrid_search
 from app.skills.loader import ship30_prompt
@@ -163,8 +163,15 @@ class LocalRagEngine:
                     yield TokenEvent(text=visible_text)
 
             # 4. Citations from database truth (only markers the model used
-            #    AND retrieval actually returned survive).
-            for citation in extract_citations(full_text, chunks):
+            #    AND retrieval actually returned survive). Small models
+            #    sometimes answer from the excerpts but forget the markers —
+            #    fall back to guests explicitly named in the answer.
+            citations = extract_citations(full_text, chunks)
+            if not citations and chunks:
+                citations = fallback_citations_by_guest(full_text, chunks)
+                if citations:
+                    log.info("citation.fallback_by_guest", count=len(citations))
+            for citation in citations:
                 yield CitationEvent(citation=citation)
 
             # 5. Artifacts extracted from fences, sanitized, persisted.
@@ -242,7 +249,9 @@ class LocalRagEngine:
             "options": {
                 # Essays need headroom: skill + excerpts + ~1,700 output tokens.
                 "num_ctx": 16384 if intent != "chat" else 8192,
-                "temperature": 0.7,
+                # Low temperature for chat: small models follow the citation
+                # format far more reliably; essays keep some creative room.
+                "temperature": 0.3 if intent == "chat" else 0.7,
             },
         }
         # Ollama rejects `think` on models without a thinking mode, so send it

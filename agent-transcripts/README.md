@@ -34,6 +34,8 @@ broke and how it was verified and fixed.
 | 7 | **First model pull silently failed** (network); a later health probe caught the missing model | `/health/ready` reported `ollama reachable but model not pulled` — the check exists precisely for this | re-pull; `scripts/demo.sh` verifies the model on every start |
 | 8 | **8 GB memory pressure**: running ingestion (ONNX embedding) concurrently with model load thrashed the machine; Postgres briefly entered crash recovery | ingest CLI died with `CannotConnectNowError`; `memory_pressure` at 16% free | ingest is hash-idempotent so re-running resumed cleanly; README warns against concurrent ingest + inference on small machines; memory budget table in architecture.md |
 
+| 9 | **Citation markers flaky at temperature 0.7**: on the flagship demo prompt the 3B model produced a well-grounded answer but skipped every [n] marker → zero chips + a misleading "no sources" notice | user's first real browser session | chat temperature lowered to 0.3 (markers now emitted reliably: 6/6/6 across repeat runs, latency 44s → 11s warm) + a deterministic backstop that cites retrieved chunks whose guest is explicitly named in the answer — still database-truth, never fabricable |
+
 ## Files
 
 - `session-*.jsonl` — raw Claude Code session logs (tool calls, outputs,

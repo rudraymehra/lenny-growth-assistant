@@ -34,6 +34,29 @@ def citation_for(index: int, chunk: RetrievedChunk) -> Citation:
     )
 
 
+def fallback_citations_by_guest(
+    text: str, retrieved: list[RetrievedChunk], limit: int = 4
+) -> list[Citation]:
+    """Deterministic backstop for small local models that answer from the
+    excerpts but forget the [n] markers: attach a citation for each retrieved
+    chunk whose guest is explicitly named in the answer (one per guest,
+    first-retrieved chunk wins). Still database-truth — a guest that wasn't
+    retrieved can never be cited."""
+    citations: list[Citation] = []
+    cited_guests: set[str] = set()
+    lowered = text.lower()
+    for i, chunk in enumerate(retrieved, start=1):
+        guest = chunk.guest.strip()
+        if len(guest) < 4 or guest.lower() in cited_guests:
+            continue
+        if guest.lower() in lowered:
+            cited_guests.add(guest.lower())
+            citations.append(citation_for(i, chunk))
+            if len(citations) >= limit:
+                break
+    return citations
+
+
 def extract_citations(text: str, retrieved: list[RetrievedChunk]) -> list[Citation]:
     """Map [n] markers in model output to citations. n is 1-based into the
     retrieved-chunk list, in retrieval order. Deduplicated, ordered by first

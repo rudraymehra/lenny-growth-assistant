@@ -46,6 +46,22 @@ def test_deep_link_math():
     assert youtube_deep_link(None, 5) is None
 
 
+def test_fallback_by_guest_names():
+    from app.rag.citations import fallback_citations_by_guest
+
+    retrieved = [_chunk(1), _chunk(2), _chunk(3)]  # guests "Guest 1..3"
+    text = "Guest 2 says PMF is a spectrum. Guest 2 repeats. Guest 3 disagrees."
+    citations = fallback_citations_by_guest(text, retrieved)
+    # one per named guest, in retrieval order, unnamed guest 1 excluded
+    assert [c.episode_slug for c in citations] == ["ep-2", "ep-3"]
+
+
+def test_fallback_never_cites_unretrieved_guests():
+    from app.rag.citations import fallback_citations_by_guest
+
+    assert fallback_citations_by_guest("Brian Chesky said things.", [_chunk(1)]) == []
+
+
 def test_quote_is_truncated():
     citations = extract_citations("x [1]", [_chunk(1)])
     assert len(citations[0].quote) <= 221
