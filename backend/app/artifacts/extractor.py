@@ -1,10 +1,15 @@
-"""Streaming-safe extraction of ```artifact:*``` fenced blocks.
+"""Streaming-safe extraction of four-backtick ````artifact:*```` fenced blocks.
 
-The local engine asks the model to put generated documents inside
+The local engine asks the model to put generated documents inside a
+FOUR-backtick fence:
 
-    ```artifact:markdown title="My Title"
-    ...content...
-    ```
+    ````artifact:markdown title="My Title"
+    ...content, which may itself contain ```code``` blocks...
+    ````
+
+Four backticks (not three) are used deliberately so a document that contains
+ordinary three-backtick code blocks — checklists, templates, essays with
+examples — cannot accidentally close the artifact fence early.
 
 This filter consumes stream deltas and (a) suppresses fence content from the
 visible chat text, (b) captures each block as an ExtractedArtifact. Because a
@@ -15,8 +20,8 @@ small tail of un-emitted text until it can rule out a fence start.
 import re
 from dataclasses import dataclass
 
-_OPEN = re.compile(r"```artifact:(markdown|html)(?:[ \t]+title=\"([^\"\n]{0,150})\")?[ \t]*\n")
-_CLOSE = re.compile(r"\n```[ \t]*(?:\n|$)")
+_OPEN = re.compile(r"````artifact:(markdown|html)(?:[ \t]+title=\"([^\"\n]{0,150})\")?[ \t]*\n")
+_CLOSE = re.compile(r"\n````[ \t]*(?:\n|$)")
 # Longest prefix we might need to hold back to detect a split fence marker.
 _HOLDBACK = 200
 

@@ -206,8 +206,11 @@ Two independent layers; either alone should hold.
    https/http/mailto URLs, https images.
    *Blocked:* `<script>` and all `on*` handlers (execution), `<iframe>/<object>/<embed>`
    (nested contexts), `<form>/<input>` (credential capture), `javascript:`/`data:`
-   URLs, `<link>`/`<base>` (external fetch / URL hijack). Raw + sanitized are
-   both stored, so `GET /artifacts/{id}?raw=true` shows exactly what was removed.
+   URLs, `<link>`/`<base>` (external fetch / URL hijack). Because nh3 does not
+   parse CSS, a second pass strips `url()`/`@import`/`expression()`/`image-set()`
+   from surviving CSS, so a prompt-injected `<style>` can't beacon to a remote
+   host. Raw + sanitized are both stored, so `GET /artifacts/{id}?raw=true`
+   shows exactly what was removed.
 2. **Client (`SandboxFrame.tsx`)** — `<iframe sandbox="" srcdoc>`: empty
    sandbox = no scripts, opaque origin (no cookies/storage/parent DOM), no
    forms/popups/navigation — plus an injected CSP of

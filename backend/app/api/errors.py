@@ -29,6 +29,11 @@ class ProviderUnavailableError(AppError):
     code = "provider_unavailable"
 
 
+class ConflictError(AppError):
+    status_code = 409
+    code = "conflict"
+
+
 def error_response(request: Request, status_code: int, code: str, message: str) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,

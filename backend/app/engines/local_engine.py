@@ -47,11 +47,11 @@ Rules:
 - If the excerpts do not contain enough information to answer, say exactly that in one short paragraph — do not invent facts, do not use outside knowledge, and do not add citation markers you cannot support.
 - Answer in clean markdown. Be direct and practical."""
 
-_ARTIFACT_INSTRUCTION = """When the user asks for a document (HTML page or markdown document), output it inside a fenced block:
+_ARTIFACT_INSTRUCTION = """When the user asks for a document (HTML page or markdown document), output it inside a FOUR-backtick fenced block (four backticks, not three, so any code blocks inside stay intact):
 
-```artifact:{kind} title="A short descriptive title"
+````artifact:{kind} title="A short descriptive title"
 ...the complete document...
-```
+````
 
 For HTML: produce one complete, self-contained document with inline <style>. No JavaScript, no external resources except https images. Before the fenced block, write one short sentence saying what you created. Do not repeat the document content outside the block."""
 
@@ -196,12 +196,22 @@ class LocalRagEngine:
                         "It may be loading — try again, or use a smaller model.",
                 recoverable=True,
             )
-        except (httpx.ConnectError, httpx.HTTPStatusError) as exc:
+        except httpx.ConnectError as exc:
             log.error(EVT_ENGINE_ERROR, provider=self.name, code="ollama_unreachable", detail=str(exc))
             yield ErrorEvent(
                 code="ollama_unreachable",
                 message="Could not reach Ollama. Start it with: brew services start ollama "
                         f"(and pull the model: ollama pull {self._settings.ollama_model}).",
+                recoverable=True,
+            )
+        except httpx.HTTPStatusError as exc:
+            # Ollama is running but returned an error (model missing, OOM, bad
+            # request) — a different fix than "start Ollama".
+            log.error(EVT_ENGINE_ERROR, provider=self.name, code="ollama_error", detail=str(exc))
+            yield ErrorEvent(
+                code="ollama_error",
+                message=f"Ollama returned an error. Check the model is pulled "
+                        f"(ollama pull {self._settings.ollama_model}) and has enough memory.",
                 recoverable=True,
             )
         except Exception as exc:  # noqa: BLE001 — engine contract: always terminate the stream

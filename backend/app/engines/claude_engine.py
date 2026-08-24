@@ -47,11 +47,14 @@ Rules:
 
 
 class _RequestContext:
-    """Per-request accumulation shared with the MCP tool closures."""
+    """Per-request accumulation shared with the MCP tool closures. marker_base
+    offsets this request's citation numbers past earlier turns' numbers so a
+    resumed session never reuses a marker (see rag/citations.py)."""
 
-    def __init__(self) -> None:
+    def __init__(self, marker_base: int = 0) -> None:
         self.retrieved: list[RetrievedChunk] = []
         self.artifacts: list[Any] = []  # domain Artifact rows created via save_artifact
+        self.marker_base = marker_base
 
 
 class ClaudeAgentEngine:
@@ -63,6 +66,9 @@ class ClaudeAgentEngine:
         self._artifact_repo = ArtifactRepo(pool)
         self._session_repo = SessionRepo(pool)
         self._semaphore = asyncio.Semaphore(settings.max_concurrent_agent_sessions)
+        # Per-session running total of citation markers issued, so a resumed
+        # session's later turns number their excerpts above earlier turns'.
+        self._marker_base: dict[str, int] = {}
 
     async def check(self) -> EngineHealth:
         # Key presence only — a readiness probe must never spend API credit.
@@ -79,7 +85,8 @@ class ClaudeAgentEngine:
         )
 
         started = time.perf_counter()
-        ctx = _RequestContext()
+        sid = str(session.id)
+        ctx = _RequestContext(marker_base=self._marker_base.get(sid, 0))
         full_text = ""
         usage = Usage(provider=self.name, model=self._settings.anthropic_model)
 
@@ -113,8 +120,11 @@ class ClaudeAgentEngine:
             # Essays/documents carry their [n] markers inside the artifact, so
             # scan artifact bodies too — chips then link the essay's sources.
             citation_text = full_text + "\n" + "\n".join(a.content for a in ctx.artifacts)
-            for citation in extract_citations(citation_text, ctx.retrieved):
+            for citation in extract_citations(citation_text, ctx.retrieved, ctx.marker_base):
                 yield CitationEvent(citation=citation)
+            # Advance the per-session base so the next turn's markers don't
+            # collide with the numbers this turn used.
+            self._marker_base[sid] = ctx.marker_base + len(ctx.retrieved)
             for artifact in ctx.artifacts:
                 yield ArtifactEvent(
                     artifact_id=artifact.id, kind=artifact.kind, title=artifact.title
@@ -201,7 +211,7 @@ class ClaudeAgentEngine:
             if not chunks:
                 return {"content": [{"type": "text",
                                      "text": "No relevant transcript excerpts found."}]}
-            start_index = len(ctx.retrieved)
+            start_index = ctx.marker_base + len(ctx.retrieved)
             ctx.retrieved.extend(chunks)
             rendered = "\n\n".join(
                 f"[{start_index + i}] {c.guest} — \"{c.episode_title}\" (t={c.start_ts}s)\n"

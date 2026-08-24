@@ -14,6 +14,7 @@ heartbeat exists to survive (found the hard way; regression-tested).
 """
 
 import asyncio
+import contextlib
 from typing import AsyncIterator
 
 from app.models.domain import DoneEvent, EngineEvent, ErrorEvent, Usage
@@ -60,6 +61,10 @@ async def sse_stream(
                 continue
             if item is _SENTINEL:
                 break
+            if terminal_sent:
+                # Invariant: exactly one terminal frame. Drop anything the
+                # engine emits after done/error rather than send a second one.
+                continue
             yield encode_frame(item)
             if isinstance(item, (DoneEvent, ErrorEvent)):
                 terminal_sent = True
@@ -67,3 +72,5 @@ async def sse_stream(
             yield encode_frame(DoneEvent(usage=Usage()))
     finally:
         pump_task.cancel()
+        with contextlib.suppress(BaseException):
+            await pump_task  # let the engine/subprocess teardown settle

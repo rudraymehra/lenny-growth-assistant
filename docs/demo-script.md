@@ -57,7 +57,7 @@ terminal. Upload to YouTube (unlisted is fine), camera enabled throughout.
 
 ## 2:20–2:45 — Ops close
 
-8. Terminal: `make test` (62 green), then `make eval` scrolling the hit@5
+8. Terminal: `make test` (73 green), then `make eval` scrolling the hit@5
    table:
    > "Retrieval quality is measured, not assumed — a golden set gates at 80%
    > hit-at-5. One command boots the whole stack; structured JSON logs trace

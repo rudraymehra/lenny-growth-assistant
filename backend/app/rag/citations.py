@@ -57,10 +57,16 @@ def fallback_citations_by_guest(
     return citations
 
 
-def extract_citations(text: str, retrieved: list[RetrievedChunk]) -> list[Citation]:
-    """Map [n] markers in model output to citations. n is 1-based into the
-    retrieved-chunk list, in retrieval order. Deduplicated, ordered by first
-    appearance; unmatched markers are dropped and logged."""
+def extract_citations(
+    text: str, retrieved: list[RetrievedChunk], marker_base: int = 0
+) -> list[Citation]:
+    """Map [n] markers in model output to citations. Markers are numbered
+    `marker_base + 1 .. marker_base + len(retrieved)` (marker_base is 0 for the
+    single-request local engine; for the resumed cloud engine it is the count
+    of markers used in earlier turns, so a stale marker the model recalls from
+    a prior turn's transcript falls out of range and is safely dropped rather
+    than mislinked to an unrelated chunk). Deduplicated, ordered by first
+    appearance; unmatched markers are logged."""
     citations: list[Citation] = []
     seen_markers: set[int] = set()
     seen_chunks: set[int] = set()  # same chunk can get two indices across searches
@@ -69,8 +75,9 @@ def extract_citations(text: str, retrieved: list[RetrievedChunk]) -> list[Citati
         if n in seen_markers:
             continue
         seen_markers.add(n)
-        if 1 <= n <= len(retrieved):
-            chunk = retrieved[n - 1]
+        idx = n - marker_base - 1
+        if 0 <= idx < len(retrieved):
+            chunk = retrieved[idx]
             if chunk.chunk_id in seen_chunks:
                 continue
             seen_chunks.add(chunk.chunk_id)

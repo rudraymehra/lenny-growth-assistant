@@ -11,7 +11,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 OLLAMA_MODEL="$(grep -E '^OLLAMA_MODEL=' .env 2>/dev/null | cut -d= -f2 || true)"
-OLLAMA_MODEL="${OLLAMA_MODEL:-qwen3:4b}"
+OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.2:3b}"  # keep in sync with backend/app/config.py
 OLLAMA_HOST_URL="http://localhost:11434"
 
 step() { printf '\n\033[1;36m▸ %s\033[0m\n' "$1"; }

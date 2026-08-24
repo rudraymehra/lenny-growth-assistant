@@ -143,6 +143,52 @@ async def test_artifact_roundtrip(client: httpx.AsyncClient, clean_db):
     assert "<script" in raw["content"]  # audit view keeps the original
 
 
+async def test_no_double_terminal_frame_when_engine_emits_after_done(
+    clean_db, fake_engine: FakeEngine
+):
+    from app.models.domain import Citation, DoneEvent, TokenEvent, Usage
+    # engine misbehaves: emits a token AFTER done — the wire must still carry
+    # exactly one terminal frame
+    fake_engine.events = [
+        TokenEvent(text="hi"),
+        DoneEvent(usage=Usage(output_tokens=1)),
+        TokenEvent(text="stray after done"),
+    ]
+    from app.main import create_app
+    from app.config import Settings
+    from app.db.repos import ArtifactRepo, KnowledgeRepo, MessageRepo, SessionRepo
+    from tests.conftest import FakeRouter, TEST_DATABASE_URL
+
+    app = create_app(lifespan_ctx=None)
+    app.state.settings = Settings(database_url=TEST_DATABASE_URL)
+    app.state.pool = clean_db
+    app.state.session_repo = SessionRepo(clean_db)
+    app.state.message_repo = MessageRepo(clean_db)
+    app.state.artifact_repo = ArtifactRepo(clean_db)
+    app.state.knowledge_repo = KnowledgeRepo(clean_db)
+    app.state.engine_router = FakeRouter(fake_engine)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        sid = (await c.post("/api/v1/sessions", json={})).json()["id"]
+        resp = await c.post(f"/api/v1/sessions/{sid}/messages", json={"content": "hi"})
+        kinds = [k for k, _ in parse_sse(resp.text)]
+        assert kinds.count("done") + kinds.count("error") == 1
+        assert kinds[-1] == "done"
+        assert "stray after done" not in resp.text
+
+
+async def test_assistant_persisted_before_done_is_forwarded(client: httpx.AsyncClient):
+    # C1: the assistant row must exist by the time the client sees `done`
+    session_id = (await client.post("/api/v1/sessions", json={})).json()["id"]
+    resp = await client.post(
+        f"/api/v1/sessions/{session_id}/messages", json={"content": "q"}
+    )
+    assert "event: done" in resp.text
+    messages = (await client.get(f"/api/v1/sessions/{session_id}/messages")).json()["messages"]
+    assert [m["role"] for m in messages] == ["user", "assistant"]
+    assert messages[1]["content"] == "Grounded answer with a citation [1]."
+
+
 async def test_health_liveness(client: httpx.AsyncClient):
     resp = await client.get("/api/v1/health")
     assert resp.status_code == 200

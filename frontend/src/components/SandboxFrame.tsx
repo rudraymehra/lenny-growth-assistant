@@ -6,8 +6,12 @@
 // belt-and-braces: even if markup slipped past the server sanitizer, the
 // document may load nothing but inline styles and https images.
 
+// img-src https: (no data:) matches the server sanitizer, which allows only
+// https images and strips CSS url()/@import. No script-src, connect-src, or
+// frame-src: the document can style itself and show https images — nothing
+// else can execute or phone home.
 const CSP =
-  "default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; font-src 'none'";
+  "default-src 'none'; style-src 'unsafe-inline'; img-src https:; font-src 'none'";
 
 export default function SandboxFrame({ html, title }: { html: string; title: string }) {
   const doc = `<!doctype html><html><head>

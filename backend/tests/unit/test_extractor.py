@@ -1,9 +1,11 @@
 """ArtifactStreamFilter: fence content never leaks into chat text, artifacts
-are captured intact, and split-across-deltas markers are handled."""
+are captured intact (including documents with inner ```code``` blocks — the
+reason the artifact fence uses four backticks), and split-across-deltas markers
+are handled."""
 
 from app.artifacts.extractor import ArtifactStreamFilter
 
-DOC = 'Here is your page.\n```artifact:html title="Growth One-Pager"\n<h1>Hi</h1>\n<p>Body</p>\n```\nDone!'
+DOC = 'Here is your page.\n````artifact:html title="Growth One-Pager"\n<h1>Hi</h1>\n<p>Body</p>\n````\nDone!'
 
 
 def _run(pieces: list[str]) -> tuple[str, ArtifactStreamFilter]:
@@ -34,8 +36,30 @@ def test_marker_split_across_every_boundary():
     assert f.artifacts[0].content == "<h1>Hi</h1>\n<p>Body</p>"
 
 
+def test_inner_triple_backtick_code_block_does_not_close_artifact():
+    # The whole reason for four-backtick fences: a markdown document that
+    # contains an ordinary ```code``` block must stay intact in the artifact.
+    text = (
+        'Here is the checklist.\n'
+        '````artifact:markdown title="Checklist"\n'
+        '# Onboarding checklist\n\n'
+        'Run this query:\n\n'
+        '```sql\nSELECT count(*) FROM users;\n```\n\n'
+        'Then review the funnel.\n'
+        '````\n'
+        'Let me know if you want changes.'
+    )
+    visible, f = _run([text])
+    assert len(f.artifacts) == 1
+    body = f.artifacts[0].content
+    assert "```sql" in body and "SELECT count(*)" in body  # inner block preserved
+    assert "Then review the funnel." in body                # nothing lost after it
+    assert "SELECT count" not in visible                    # document didn't leak to chat
+    assert "Let me know if you want changes." in visible
+
+
 def test_markdown_artifact_without_title():
-    text = "```artifact:markdown\n# Essay\n\nBody text.\n```"
+    text = "````artifact:markdown\n# Essay\n\nBody text.\n````"
     visible, f = _run([text[:10], text[10:25], text[25:]])
     assert visible.strip() == ""
     assert f.artifacts[0].kind == "markdown"
@@ -44,7 +68,7 @@ def test_markdown_artifact_without_title():
 
 
 def test_unterminated_fence_is_recovered_on_flush():
-    visible, f = _run(["preamble\n```artifact:markdown title=\"T\"\npartial content"])
+    visible, f = _run(['preamble\n````artifact:markdown title="T"\npartial content'])
     assert "preamble" in visible
     assert "partial content" not in visible
     assert len(f.artifacts) == 1

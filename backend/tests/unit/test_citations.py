@@ -46,6 +46,21 @@ def test_deep_link_math():
     assert youtube_deep_link(None, 5) is None
 
 
+def test_marker_base_offsets_numbering():
+    # cloud resumed turn 2: markers are numbered above earlier turns'
+    retrieved = [_chunk(10), _chunk(11)]  # this turn's chunks, markers [5],[6]
+    citations = extract_citations("Claim [5] and [6].", retrieved, marker_base=4)
+    assert [c.episode_slug for c in citations] == ["ep-10", "ep-11"]
+    assert [c.index for c in citations] == [5, 6]
+
+
+def test_stale_marker_from_prior_turn_is_dropped_not_mislinked():
+    # model recalls [1] from turn 1's transcript; this turn only has markers 5,6
+    retrieved = [_chunk(10), _chunk(11)]
+    citations = extract_citations("Recalled [1]. Fresh [5].", retrieved, marker_base=4)
+    assert [c.index for c in citations] == [5]  # [1] dropped, never mislinked
+
+
 def test_fallback_by_guest_names():
     from app.rag.citations import fallback_citations_by_guest
 

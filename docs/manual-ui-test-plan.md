@@ -50,7 +50,7 @@ human in a browser can judge.
 
 ## E. Provider toggle & resilience
 
-11. Sidebar: "💻 Local" → new session → badge shows "Local · qwen3:4b".
+11. Sidebar: "💻 Local" → new session → badge shows "Local · llama3.2:3b".
     Ask one question; footer shows "$0.00 (local)".
 12. (If key configured) "☁ Claude" → badge "Claude · claude-sonnet-5"; cost
     footer shows real dollars.
